@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>English Word Search</title>
+
+<style>
+
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    padding:20px 10px 40px;
+    background:#101522;
+    color:white;
+    font-family:Arial,sans-serif;
+    text-align:center;
+    overflow-x:hidden;
+}
+
+h1{
+    margin:5px 0 8px;
+    font-size:30px;
+}
+
+.subtitle{
+    margin:0 0 18px;
+    color:#bfc7d5;
+    font-size:16px;
+}
+
+#board{
+    width:min(94vw,620px);
+    margin:20px auto;
+    display:grid;
+    grid-template-columns:repeat(18,minmax(0,1fr));
+    gap:3px;
+    user-select:none;
+    -webkit-user-select:none;
+    touch-action:none;
+}
+
+.cell{
+    aspect-ratio:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#20283a;
+    border-radius:5px;
+    font-size:clamp(11px,3.7vw,22px);
+    font-weight:bold;
+    color:#ffffff;
+    cursor:pointer;
+    touch-action:none;
+}
+
+.cell.selected{
+    background:#3478f6;
+}
+
+.cell.found{
+    background:#21a366;
+    color:white;
+}
+
+#words{
+    width:min(94vw,700px);
+    margin:25px auto;
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:8px;
+}
+
+.word{
+    padding:8px 10px;
+    background:#20283a;
+    border-radius:8px;
+    font-size:14px;
+    font-weight:bold;
+}
+
+.word.found{
+    background:#21a366;
+    text-decoration:line-through;
+    opacity:.8;
+}
+
+button{
+    border:0;
+    background:#3478f6;
+    color:white;
+    padding:12px 22px;
+    border-radius:10px;
+    font-size:16px;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+button:active{
+    transform:scale(.97);
+}
+
+#message{
+    min-height:28px;
+    margin:12px 0;
+    color:#8fd3ff;
+    font-weight:bold;
+}
+
+@media(max-width:500px){
+
+    body{
+        padding:15px 5px 30px;
+    }
+
+    h1{
+        font-size:24px;
+    }
+
+    .subtitle{
+        font-size:14px;
+    }
+
+    #board{
+        width:96vw;
+        gap:2px;
+    }
+
+    .cell{
+        border-radius:3px;
+        font-size:clamp(9px,4.8vw,18px);
+    }
+
+    .word{
+        font-size:12px;
+        padding:7px 8px;
+    }
+
+}
+
+</style>
+</head>
+
+<body>
+
+<h1>🔎 English Word Search</h1>
+
+<p class="subtitle">
+Find all the English words in the grid!
+</p>
+
+<div id="message"></div>
+
+<div id="board"></div>
+
+<h2>Words to Find</h2>
+
+<div id="words"></div>
+
+<button onclick="newGame()">🔄 New Game</button>
+
+<script>
+
+const WORDS = [
+
+    "RUBBISH",
+    "CUPBOARD",
+    "HOB",
+    "WASHINGUPLIQUID",
+    "TORCH",
+    "BEDROOM",
+    "NEIGHBOURHOOD",
+    "SPACIOUS",
+    "AIRY",
+    "APPLIANCE",
+    "NEIGHBOUR",
+    "DETACHEDHOUSE",
+    "HIGHRISE",
+    "PROPERTY",
+    "UTILITYROOM",
+    "ELEGANT",
+    "FULLYFURNISHED",
+    "PEACEFUL",
+    "QUIET",
+    "CONVENIENT",
+    "SECURE",
+    "OVEN",
+    "WASHINGMACHINE",
+    "TUMBLEDRYER",
+    "KETTLE",
+    "MICROWAVE",
+    "AIRCONDITIONER",
+    "AIRPURIFIER",
+    "ROBOTVACUUM",
+    "SMARTTV",
+    "SMARTSPEAKER",
+    "SECURITYSYSTEM"
+
+];
+
+const SIZE = 18;
+
+const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+const DIRECTIONS = [
+    [0,1],
+    [1,0],
+    [0,-1],
+    [-1,0]
+];
+
+let grid = [];
+let placements = [];
+let found = new Set();
+
+let selectedCells = [];
+let dragging = false;
+let startCell = null;
+
+
+/* =========================
+   CREATE EMPTY GRID
+========================= */
+
+function emptyGrid(){
+
+    return Array.from(
+        {length:SIZE},
+        () => Array(SIZE).fill("")
+    );
+
+}
+
+
+/* =========================
+   CHECK WORD PLACEMENT
+========================= */
+
+function canPlace(word,row,col,dr,dc){
+
+    for(let i=0;i<word.length;i++){
+
+        const r = row + dr*i;
+        const c = col + dc*i;
+
+        if(r < 0 || r >= SIZE || c < 0 || c >= SIZE){
+            return false;
+        }
+
+        const current = grid[r][c];
+
+        if(current !== "" && current !== word[i]){
+            return false;
+        }
+
+    }
+
+    return true;
+
+}
+
+
+/* =========================
+   PLACE WORD
+========================= */
+
+function placeWord(word){
+
+    const possible = [];
+
+    for(let r=0;r<SIZE;r++){
+
+        for(let c=0;c<SIZE;c++){
+
+            for(const [dr,dc] of DIRECTIONS){
+
+                if(canPlace(word,r,c,dr,dc)){
+
+                    let overlap = 0;
+
+                    for(let i=0;i<word.length;i++){
+
+                        const rr = r + dr*i;
+                        const cc = c + dc*i;
+
+                        if(grid[rr][cc] === word[i]){
+                            overlap++;
+                        }
+
+                    }
+
+                    possible.push({
+                        row:r,
+                        col:c,
+                        dr:dr,
+                        dc:dc,
+                        overlap:overlap
+                    });
+
+                }
+
+            }
+
+        }
+
+    }
+
+    if(possible.length === 0){
+        return false;
+    }
+
+    possible.sort((a,b)=>b.overlap-a.overlap);
+
+    const top = possible.slice(
+        0,
+        Math.min(20,possible.length)
+    );
+
+    const chosen =
+        top[Math.floor(Math.random()*top.length)];
+
+    const cells = [];
+
+    for(let i=0;i<word.length;i++){
+
+        const r = chosen.row + chosen.dr*i;
+        const c = chosen.col + chosen.dc*i;
+
+        grid[r][c] = word[i];
+
+        cells.push([r,c]);
+
+    }
+
+    placements.push({
+        word:word,
+        cells:cells
+    });
+
+    return true;
+
+}
+
+
+/* =========================
+   CREATE GAME
+========================= */
+
+function createGame(){
+
+    for(let attempt=0;attempt<1000;attempt++){
+
+        grid = emptyGrid();
+        placements = [];
+
+        const sortedWords = [...WORDS].sort(
+            (a,b)=>b.length-a.length
+        );
+
+        let success = true;
+
+        for(const word of sortedWords){
+
+            if(!placeWord(word)){
+
+                success = false;
+                break;
+
+            }
+
+        }
+
+        if(success){
+
+            fillEmptyCells();
+
+            return true;
+
+        }
+
+    }
+
+    return false;
+
+}
+
+
+/* =========================
+   FILL EMPTY CELLS
+========================= */
+
+function fillEmptyCells(){
+
+    for(let r=0;r<SIZE;r++){
+
+        for(let c=0;c<SIZE;c++){
+
+            if(grid[r][c] === ""){
+
+                grid[r][c] =
+                    LETTERS[
+                        Math.floor(
+                            Math.random()*LETTERS.length
+                        )
+                    ];
+
+            }
+
+        }
+
+    }
+
+}
+
+
+/* =========================
+   DRAW BOARD
+========================= */
+
+function renderBoard(){
+
+    const board =
+        document.getElementById("board");
+
+    board.innerHTML = "";
+
+    for(let r=0;r<SIZE;r++){
+
+        for(let c=0;c<SIZE;c++){
+
+            const cell =
+                document.createElement("div");
+
+            cell.className = "cell";
+
+            cell.textContent = grid[r][c];
+
+            cell.dataset.row = r;
+            cell.dataset.col = c;
+
+            board.appendChild(cell);
+
+        }
+
+    }
+
+}
+
+
+/* =========================
+   DRAW WORD LIST
+========================= */
+
+function renderWords(){
+
+    const container =
+        document.getElementById("words");
+
+    container.innerHTML = "";
+
+    WORDS.forEach(word=>{
+
+        const item =
+            document.createElement("div");
+
+        item.className = "word";
+
+        item.dataset.word = word;
+
+        item.textContent = word;
+
+        container.appendChild(item);
+
+    });
+
+}
+
+
+/* =========================
+   GET CELL
+========================= */
+
+function getCell(element){
+
+    if(!element){
+        return null;
+    }
+
+    const cell =
+        element.closest(".cell");
+
+    if(!cell){
+        return null;
+    }
+
+    return {
+        element:cell,
+        row:Number(cell.dataset.row),
+        col:Number(cell.dataset.col)
+    };
+
+}
+
+
+/* =========================
+   STRAIGHT LINE ONLY
+========================= */
+
+function getLine(start,end){
+
+    const dr =
+        Math.sign(end.row-start.row);
+
+    const dc =
+        Math.sign(end.col-start.col);
+
+    const rowDiff =
+        Math.abs(end.row-start.row);
+
+    const colDiff =
+        Math.abs(end.col-start.col);
+
+    /* NO DIAGONALS */
+
+    if(rowDiff !== 0 && colDiff !== 0){
+        return [];
+    }
+
+    const length =
+        Math.max(rowDiff,colDiff)+1;
+
+    const cells = [];
+
+    for(let i=0;i<length;i++){
+
+        const row =
+            start.row + dr*i;
+
+        const col =
+            start.col + dc*i;
+
+        const element =
+            document.querySelector(
+                `.cell[data-row="${row}"][data-col="${col}"]`
+            );
+
+        if(element){
+            cells.push(element);
+        }
+
+    }
+
+    return cells;
+
+}
+
+
+/* =========================
+   PAINT SELECTION
+========================= */
+
+function paint(){
+
+    document
+        .querySelectorAll(".cell.selected")
+        .forEach(cell=>{
+            cell.classList.remove("selected");
+        });
+
+    selectedCells.forEach(cell=>{
+        cell.classList.add("selected");
+    });
+
+}
+
+
+/* =========================
+   START DRAG
+========================= */
+
+function startSelection(cell){
+
+    dragging = true;
+
+    startCell = cell;
+
+    selectedCells = [cell.element];
+
+    paint();
+
+}
+
+
+/* =========================
+   MOVE
+========================= */
+
+function moveSelection(cell){
+
+    if(!dragging || !startCell){
+        return;
+    }
+
+    const line =
+        getLine(startCell,cell);
+
+    if(line.length > 0){
+
+        selectedCells = line;
+
+        paint();
+
+    }
+
+}
+
+
+/* =========================
+   FINISH
+========================= */
+
+function finishSelection(){
+
+    if(!dragging){
+        return;
+    }
+
+    dragging = false;
+
+    const text =
+        selectedCells
+        .map(cell=>cell.textContent)
+        .join("");
+
+    const reverse =
+        text.split("").reverse().join("");
+
+    let matched = null;
+
+    for(const word of WORDS){
+
+        if(found.has(word)){
+            continue;
+        }
+
+        if(text === word || reverse === word){
+
+            matched = word;
+            break;
+
+        }
+
+    }
+
+    if(matched){
+
+        found.add(matched);
+
+        selectedCells.forEach(cell=>{
+
+            cell.classList.remove("selected");
+
+            cell.classList.add("found");
+
+        });
+
+        const wordElement =
+            document.querySelector(
+                `.word[data-word="${matched}"]`
+            );
+
+        if(wordElement){
+
+            wordElement.classList.add("found");
+
+        }
+
+        document.getElementById("message")
+            .textContent =
+            "✓ Found: " + matched;
+
+        if(found.size === WORDS.length){
+
+            document.getElementById("message")
+                .textContent =
+                "🎉 Excellent! You found all the words!";
+
+        }
+
+    }else{
+
+        selectedCells.forEach(cell=>{
+            cell.classList.remove("selected");
+        });
+
+    }
+
+    selectedCells = [];
+    startCell = null;
+
+}
+
+
+/* =========================
+   POINTER EVENTS
+========================= */
+
+const board =
+    document.getElementById("board");
+
+
+board.addEventListener(
+    "pointerdown",
+    function(e){
+
+        const cell =
+            getCell(e.target);
+
+        if(!cell){
+            return;
+        }
+
+        e.preventDefault();
+
+        try{
+            board.setPointerCapture(e.pointerId);
+        }catch(error){}
+
+        startSelection(cell);
+
+    }
+);
+
+
+board.addEventListener(
+    "pointermove",
+    function(e){
+
+        if(!dragging){
+            return;
+        }
+
+        e.preventDefault();
+
+        const element =
+            document.elementFromPoint(
+                e.clientX,
+                e.clientY
+            );
+
+        const cell =
+            getCell(element);
+
+        if(cell){
+
+            moveSelection(cell);
+
+        }
+
+    }
+);
+
+
+board.addEventListener(
+    "pointerup",
+    function(e){
+
+        if(!dragging){
+            return;
+        }
+
+        e.preventDefault();
+
+        finishSelection();
+
+        try{
+            board.releasePointerCapture(e.pointerId);
+        }catch(error){}
+
+    }
+);
+
+
+board.addEventListener(
+    "pointercancel",
+    function(){
+
+        dragging = false;
+
+        selectedCells = [];
+
+        startCell = null;
+
+        paint();
+
+    }
+);
+
+
+/* =========================
+   NEW GAME
+========================= */
+
+function newGame(){
+
+    found = new Set();
+
+    selectedCells = [];
+
+    dragging = false;
+
+    startCell = null;
+
+    document.getElementById("message")
+        .textContent = "";
+
+    const success = createGame();
+
+    if(!success){
+
+        document.getElementById("message")
+            .textContent =
+            "Please press New Game again.";
+
+        return;
+
+    }
+
+    renderBoard();
+
+    renderWords();
+
+}
+
+
+/* =========================
+   START
+========================= */
+
+newGame();
+
+</script>
+
+</body>
+</html>
